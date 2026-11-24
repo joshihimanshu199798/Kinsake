@@ -75,6 +75,36 @@ private fun KinsakeApp() {
     var message by remember { mutableStateOf<String?>(null) }
     var birthDate by remember { mutableStateOf(context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("birthDate", "") ?: "") }
 
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Could not create backup file")
+                output.use { repository.exportBackup(it, birthDate) }
+            }.onSuccess {
+                message = "Kinsake backup exported. Keep the ZIP file somewhere safe."
+            }.onFailure {
+                message = "Backup failed: ${it.localizedMessage ?: "Could not write the file"}"
+            }
+        }
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val input = context.contentResolver.openInputStream(uri) ?: error("Could not open selected backup")
+                input.use { repository.restoreBackup(it) }
+            }.onSuccess { restoredBirthDate ->
+                if (!restoredBirthDate.isNullOrBlank()) {
+                    birthDate = restoredBirthDate
+                    context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("birthDate", restoredBirthDate).apply()
+                }
+                storageUsed = repository.storageUsedBytes()
+                message = "Backup restored. Existing memories were kept; backup memories were added."
+            }.onFailure {
+                message = "Restore failed. Existing memories were not intentionally cleared: ${it.localizedMessage ?: "Invalid backup"}"
+            }
+        }
+    }
+
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { uris ->
         if (uris.isNotEmpty()) scope.launch {
             var imported = 0
@@ -213,6 +243,14 @@ private fun KinsakeApp() {
                     Text("Family profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     OutlinedTextField(value = birthDate, onValueChange = { birthDate = it }, label = { Text("Child date of birth (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Button(onClick = { context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("birthDate", birthDate.trim()).apply(); message = "Child profile saved on this phone" }) { Text("Save child profile") }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Backup & restore", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Export includes your photos, voice recordings, milestones and child birth date. Restore adds memories without deleting what is already on this phone.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { backupLauncher.launch("Kinsake-backup-${System.currentTimeMillis()}.zip") }) { Text("Export backup") }
+                        OutlinedButton(onClick = { restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream")) }) { Text("Restore backup") }
+                    }
+                    Text("Backup ZIP files are not encrypted. Keep them in a private, trusted location.", style = MaterialTheme.typography.bodySmall, color = Rose)
                     Text("On-device storage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
                     val stat = StatFs(context.filesDir.absolutePath)
@@ -227,7 +265,7 @@ private fun KinsakeApp() {
                     }
                     Spacer(Modifier.height(14.dp))
                     Text("Privacy", fontWeight = FontWeight.Bold)
-                    Text("No account, cloud upload or internet permission is used in this Android MVP. Uninstalling the app removes its private files, so export/backup support should be added before storing irreplaceable memories.", color = Color.Gray)
+                    Text("No account, cloud upload or internet permission is used. Export a backup before uninstalling or clearing app data. Restore merges memories and keeps existing records.", color = Color.Gray)
                 }
             }
         }
