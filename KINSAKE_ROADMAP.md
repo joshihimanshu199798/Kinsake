@@ -5,7 +5,7 @@ This roadmap is the implementation contract for the full Kinsake feature list. W
 ## Current architecture audit
 
 - Web: React 18, TypeScript, Vite, IndexedDB media store, localStorage profile, JSON backup/restore.
-- Android: Kotlin, Jetpack Compose, Room/SQLite metadata, app-private media files, Android Photo Picker and voice recording.
+- Android: Kotlin, Jetpack Compose, Room/SQLite metadata (version 2 with explicit childId migration), app-private media files, Android Photo Picker and voice recording.
 - No server, cloud sync, AI provider, guest-link service, face-recognition engine, or encryption/key-management layer is currently configured.
 - Android changes are currently carried by the native-app PR and its build-fix PR. Do not remove those changes when integrating this roadmap.
 
@@ -28,8 +28,11 @@ This roadmap is the implementation contract for the full Kinsake feature list. W
 - [ ] Add archive encryption/password protection and automated round-trip tests before treating the archive as secure long-term storage.
 
 ### Phase 3 — Parenting and family journal
-- Multiple child profiles and per-child age labels.
-- Milestones, ceremonies, quotes and family journal.
+- [x] Multiple child profiles with independent names and dates of birth on web and Android.
+- [x] Per-child memory ownership and filtering for photos, milestones and voice notes.
+- [x] Existing single-child records migrate to a default child profile without deleting media or metadata.
+- [x] Web JSON and Android ZIP backups preserve profile lists and each memory's child ID; Android restore continues to accept version 1 backups.
+- [ ] Milestones, ceremonies, quotes and family journal enhancements.
 - Growth measurements with clearly sourced WHO/IAP reference data and age/sex selection where required.
 - Vaccination records and reminders.
 - Time-capsule items with local unlock dates.

@@ -27,3 +27,5 @@
 .dark .densitybar button.selected{background:#493b37;color:#e6a49b}
 @media(max-width:950px){.grid.density-compact{grid-template-columns:repeat(4,minmax(0,1fr))}.grid.density-cozy{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.grid.density-compact{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.density-cozy{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.density-large{grid-template-columns:1fr}.throwback{gap:11px}.throwback img{width:88px;height:88px}.throwback h2{font-size:16px}.densitybar{flex-wrap:wrap}}
+
+.profileSwitch{max-width:520px;margin:0 0 16px;background:#fff;border:1px solid #efede8;border-radius:15px;padding:18px}.profileSwitch>b{font-size:12px;display:block;margin-bottom:12px}.profileChoices{display:flex;flex-wrap:wrap;gap:8px}.profileChoices button{border:1px solid #eae7e0;background:#fff;border-radius:9px;padding:9px 12px;font:600 11px 'DM Sans';color:#777;cursor:pointer}.profileChoices button.selected{background:#f8eeeb;border-color:#d9aaa2;color:#a45f58}.addChildForm{margin-top:16px}.addChildForm h3{font:600 18px 'Playfair Display';margin:0}.profile input[type=date]{min-height:38px}
