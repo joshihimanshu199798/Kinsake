@@ -119,9 +119,9 @@ private fun KinsakeApp() {
                 input.use { repository.restoreBackup(it) }
             }.onSuccess { restoredProfileJson ->
                 if (restoredProfileJson != null) {
-                    profiles = profilesFromJson(restoredProfileJson)
-                    if (profiles.isEmpty()) profiles = listOf(ChildProfile("default-child", "", ""))
-                    activeProfileId = profiles.first().id; childName = profiles.first().name; birthDate = profiles.first().birthDate
+                    val importedProfiles = profilesFromJson(restoredProfileJson).ifEmpty { listOf(ChildProfile("default-child", "", "")) }
+                    profiles = (profiles.filter { existing -> importedProfiles.none { it.id == existing.id } } + importedProfiles)
+                    activeProfileId = importedProfiles.first().id; childName = importedProfiles.first().name; birthDate = importedProfiles.first().birthDate
                     context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("profiles", profilesToJson(profiles).toString()).putString("activeChildId", activeProfileId).putString("birthDate", birthDate).apply()
                 }
                 storageUsed = repository.storageUsedBytes()
