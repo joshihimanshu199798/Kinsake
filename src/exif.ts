@@ -43,18 +43,22 @@ export async function readCaptureDate(file: File): Promise<string | null> {
       if (tiff + 8 > view.byteLength || view.getUint16(tiff + 2, little) !== 42) return null;
       const ifd0 = view.getUint32(tiff + 4, little);
       const date = readAsciiDate(tiff, little, ifd0);
-      if (date) {
-        // Prefer DateTimeOriginal in the Exif sub-IFD when available.
-        const ifd = tiff + ifd0;
+      // The Exif sub-IFD may contain DateTimeOriginal even when IFD0 has
+      // no DateTime tag. Always inspect its pointer before falling back.
+      const ifd = tiff + ifd0;
+      if (ifd >= tiff && ifd + 2 <= view.byteLength) {
         const entries = view.getUint16(ifd, little);
         for (let i = 0; i < entries; i++) {
           const entry = ifd + 2 + i * 12;
-          if (entry + 12 <= view.byteLength && view.getUint16(entry, little) === 0x8769) {
-            return readAsciiDate(tiff, little, view.getUint32(entry + 8, little)) || date;
+          if (entry + 12 > view.byteLength) break;
+          if (view.getUint16(entry, little) === 0x8769) {
+            const originalDate = readAsciiDate(tiff, little, view.getUint32(entry + 8, little));
+            if (originalDate) return originalDate;
+            break;
           }
         }
-        return date;
       }
+      if (date) return date;
     }
     offset = data + length - 2;
   }
