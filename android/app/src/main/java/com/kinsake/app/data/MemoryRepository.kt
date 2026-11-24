@@ -35,8 +35,8 @@ class MemoryRepository(context: Context) {
         dao.delete(memory)
     }
 
-    fun storageUsedBytes(): Long {
+    suspend fun storageUsedBytes(): Long = withContext(Dispatchers.IO) {
         val root = File(app.filesDir, "memories")
-        return if (root.exists()) root.walkTopDown().filter { it.isFile }.sumOf { it.length() } else 0L
+        if (root.exists()) root.walkTopDown().filter { it.isFile }.sumOf { it.length() } else 0L
     }
 }
