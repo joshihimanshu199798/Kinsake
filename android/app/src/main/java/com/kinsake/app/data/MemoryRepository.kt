@@ -109,16 +109,21 @@ class MemoryRepository(context: Context) {
                     if (destination != null) destination.parentFile?.mkdirs()
                     val buffer = ByteArray(16 * 1024)
                     val captured = java.io.ByteArrayOutputStream()
-                    var count: Int
-                    while (zip.read(buffer).also { count = it } >= 0) {
-                        if (count == 0) continue
-                        totalBytes += count
-                        if (totalBytes > 1024L * 1024L * 1024L) throw IllegalArgumentException("Backup is larger than the 1 GB restore limit")
-                        if (name == "manifest.json" && captured.size().toLong() + count > 10L * 1024L * 1024L) {
-                            throw IllegalArgumentException("Backup manifest is too large")
+                    val fileOutput = destination?.outputStream()?.buffered()
+                    try {
+                        var count: Int
+                        while (zip.read(buffer).also { count = it } >= 0) {
+                            if (count == 0) continue
+                            totalBytes += count
+                            if (totalBytes > 1024L * 1024L * 1024L) throw IllegalArgumentException("Backup is larger than the 1 GB restore limit")
+                            if (name == "manifest.json" && captured.size().toLong() + count > 10L * 1024L * 1024L) {
+                                throw IllegalArgumentException("Backup manifest is too large")
+                            }
+                            if (destination == null) captured.write(buffer, 0, count)
+                            else fileOutput?.write(buffer, 0, count)
                         }
-                        if (destination == null) captured.write(buffer, 0, count)
-                        else destination.appendBytes(buffer.copyOf(count))
+                    } finally {
+                        fileOutput?.close()
                     }
                     if (name == "manifest.json") manifestBytes = captured.toByteArray()
                     zip.closeEntry()
