@@ -57,7 +57,7 @@ class MemoryRepository(context: Context) {
             val mediaEntries = JSONArray()
             val manifest = JSONObject()
                 .put("format", "kinsake-android-backup")
-                .put("version", 1)
+                .put("version", 2)
                 .put("createdAt", System.currentTimeMillis())
                 .put("profiles", profiles)
             records.forEachIndexed { index, memory ->
@@ -133,7 +133,7 @@ class MemoryRepository(context: Context) {
 
             val rawManifest = manifestBytes ?: throw IllegalArgumentException("Backup manifest is missing")
             val manifest = JSONObject(String(rawManifest, Charsets.UTF_8))
-            if (manifest.optString("format") != "kinsake-android-backup" || manifest.optInt("version", -1) != 1) {
+            if (manifest.optString("format") != "kinsake-android-backup" || manifest.optInt("version", -1) !in setOf(1, 2)) {
                 throw IllegalArgumentException("This is not a supported Kinsake Android backup")
             }
             val items = manifest.optJSONArray("memories") ?: throw IllegalArgumentException("Backup memory list is missing")
