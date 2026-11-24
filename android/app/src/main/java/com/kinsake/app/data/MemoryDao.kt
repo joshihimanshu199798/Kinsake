@@ -14,6 +14,12 @@ interface MemoryDao {
     @Insert
     suspend fun insert(memory: Memory): Long
 
+    @Insert
+    suspend fun insertAll(memories: List<Memory>): List<Long>
+
+    @Query("SELECT * FROM memories ORDER BY dateMillis DESC, id DESC")
+    suspend fun getAll(): List<Memory>
+
     @Delete
     suspend fun delete(memory: Memory)
 
