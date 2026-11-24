@@ -1,6 +1,7 @@
 package com.kinsake.app
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.media.MediaPlayer
@@ -39,6 +40,10 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.Period
+import java.time.ZoneId
 
 private val Rose = Color(0xFFC77F76)
 private val Ink = Color(0xFF303630)
@@ -68,6 +73,7 @@ private fun KinsakeApp() {
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var birthDate by remember { mutableStateOf(context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("birthDate", "") ?: "") }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { uris ->
         if (uris.isNotEmpty()) scope.launch {
@@ -125,7 +131,7 @@ private fun KinsakeApp() {
                     Spacer(Modifier.height(22.dp))
                     Text("Recently added", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
-                    MemoryGrid(memories.take(6), onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
+                    MemoryGrid(memories.take(6), birthDate, onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
                     Button(onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Add photos") }
                 }
                 "Photos" -> {
@@ -133,7 +139,7 @@ private fun KinsakeApp() {
                         Text("Family photos", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Button(onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Add") }
                     }
-                    MemoryGrid(memories.filter { it.kind == "photo" }, onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
+                    MemoryGrid(memories.filter { it.kind == "photo" }, birthDate, onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
                 }
                 "Milestones" -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -142,7 +148,7 @@ private fun KinsakeApp() {
                     }
                     memories.filter { it.kind == "milestone" }.forEach { item ->
                         Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Column(Modifier.padding(14.dp)) { Text(item.title, fontWeight = FontWeight.Bold); if (item.note.isNotBlank()) Text(item.note); Text(dateText(item.dateMillis), style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
+                            Column(Modifier.padding(14.dp)) { Text(item.title, fontWeight = FontWeight.Bold); if (item.note.isNotBlank()) Text(item.note); Text(dateText(item.dateMillis) + (ageText(birthDate, item.dateMillis)?.let { " · $it" } ?: ""), style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
                         }
                     }
                 }
@@ -184,7 +190,7 @@ private fun KinsakeApp() {
                     }) { Text(if (recording) "Stop and save" else "Start recording") }
                     memories.filter { it.kind == "voice" }.forEach { item ->
                         Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Text(item.title, Modifier.weight(1f)); TextButton(onClick = {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(item.title); ageText(birthDate, item.dateMillis)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Rose) } }; TextButton(onClick = {
                                 item.filePath?.let { path ->
                                     runCatching {
                                         player?.release()
@@ -204,7 +210,10 @@ private fun KinsakeApp() {
                     }
                 }
                 else -> {
-                    Text("On-device storage", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Family profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(value = birthDate, onValueChange = { birthDate = it }, label = { Text("Child date of birth (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Button(onClick = { context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("birthDate", birthDate.trim()).apply(); message = "Child profile saved on this phone" }) { Text("Save child profile") }
+                    Text("On-device storage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
                     val stat = StatFs(context.filesDir.absolutePath)
                     val available = stat.availableBytes
@@ -260,7 +269,7 @@ private fun SummaryCard(label: String, value: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun MemoryGrid(items: List<Memory>, onOpen: (Memory) -> Unit, onDelete: (Memory) -> Unit) {
+private fun MemoryGrid(items: List<Memory>, birthDate: String, onOpen: (Memory) -> Unit, onDelete: (Memory) -> Unit) {
     if (items.isEmpty()) {
         Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) { Text("Your memories will appear here.", color = Color.Gray) }
     } else {
@@ -269,7 +278,7 @@ private fun MemoryGrid(items: List<Memory>, onOpen: (Memory) -> Unit, onDelete: 
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column {
                         if (memory.kind == "photo" && memory.filePath != null) {
-                            AsyncImage(model = File(memory.filePath), contentDescription = memory.title, modifier = Modifier.fillMaxWidth().height(130.dp).clickable { onOpen(memory) }, contentScale = ContentScale.Crop)
+                            Box(Modifier.fillMaxWidth().height(130.dp).clickable { onOpen(memory) }) { AsyncImage(model = File(memory.filePath), contentDescription = memory.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit); ageText(birthDate, memory.dateMillis)?.let { Text(it, Modifier.align(Alignment.BottomStart).padding(7.dp).background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(20.dp)).padding(horizontal = 8.dp, vertical = 4.dp), color = Rose, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) } }
                         } else {
                             Box(Modifier.fillMaxWidth().height(85.dp).background(Color(0xFFF2E7E3)).clickable { onOpen(memory) }, contentAlignment = Alignment.Center) { Text(if (memory.kind == "voice") "♫" else "✦", color = Rose, style = MaterialTheme.typography.headlineMedium) }
                         }
@@ -292,4 +301,17 @@ private fun formatBytes(bytes: Long): String {
     val mb = kb / 1024.0
     if (mb < 1024) return String.format(Locale.getDefault(), "%.1f MB", mb)
     return String.format(Locale.getDefault(), "%.2f GB", mb / 1024.0)
+}
+
+private fun ageText(birthDate: String, atMillis: Long): String? {
+    val birth = runCatching { LocalDate.parse(birthDate) }.getOrNull() ?: return null
+    val at = Instant.ofEpochMilli(atMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+    if (at.isBefore(birth)) return null
+    val age = Period.between(birth, at)
+    val parts = buildList {
+        if (age.years > 0) add(age.years.toString() + if (age.years == 1) " year" else " years")
+        if (age.months > 0) add(age.months.toString() + if (age.months == 1) " month" else " months")
+        if (age.days > 0) add(age.days.toString() + if (age.days == 1) " day" else " days")
+    }
+    return parts.ifEmpty { listOf("Newborn") }.joinToString(", ")
 }
