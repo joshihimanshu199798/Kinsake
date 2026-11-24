@@ -1,0 +1,6 @@
+export type Entry={id:string;kind:'photo'|'milestone'|'voice';title:string;date:string;created:number;data?:string;note?:string};
+const DB='kinsake-db', STORE='entries';
+function openDB():Promise<IDBDatabase>{return new Promise((ok,no)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE,{keyPath:'id'});};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});}
+export async function all():Promise<Entry[]>{const db=await openDB();return new Promise((ok,no)=>{const t=db.transaction(STORE,'readonly'),r=t.objectStore(STORE).getAll();r.onsuccess=()=>ok((r.result as Entry[]).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created));r.onerror=()=>no(r.error);t.oncomplete=()=>db.close();});}
+export async function put(e:Entry){const db=await openDB();return new Promise<void>((ok,no)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).put(e);t.oncomplete=()=>{db.close();ok();};t.onerror=()=>no(t.error);});}
+export async function del(id:string){const db=await openDB();return new Promise<void>((ok,no)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).delete(id);t.oncomplete=()=>{db.close();ok();};t.onerror=()=>no(t.error);});}
