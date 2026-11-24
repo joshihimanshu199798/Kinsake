@@ -10,6 +10,7 @@ import android.os.StatFs
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -122,7 +123,7 @@ private fun KinsakeApp() {
                     Text("Recently added", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     MemoryGrid(memories.take(6), onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
-                    Button(onClick = { photoPicker.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) }) { Text("Add photos") }
+                    Button(onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Add photos") }
                 }
                 "Photos" -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
