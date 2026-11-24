@@ -10,7 +10,8 @@ export default function App(){
  const [tab,setTab]=useState<Tab>('Home'),[entries,setEntries]=useState<Entry[]>([]),[name,setName]=useState(localStorage.getItem('kinsake-name')||''),[birth,setBirth]=useState(localStorage.getItem('kinsake-birth')||''),[family,setFamily]=useState(localStorage.getItem('kinsake-family')||''),[q,setQ]=useState(''),[dark,setDark]=useState(localStorage.getItem('kinsake-dark')==='true'),[notice,setNotice]=useState(''),[showMilestone,setShowMilestone]=useState(false),[recording,setRecording]=useState(false),[seconds,setSeconds]=useState(0);
  const photoRef=useRef<HTMLInputElement>(null),restoreRef=useRef<HTMLInputElement>(null),recRef=useRef<MediaRecorder|null>(null),chunks=useRef<BlobPart[]>([]),timer=useRef<number|undefined>(undefined);
  const refresh=async()=>setEntries(await all()); useEffect(()=>{refresh().catch(()=>setNotice('Local browser storage is unavailable.'));},[]);
- useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),3500);return()=>clearTimeout(t);},[notice]);\n useEffect(()=>{localStorage.setItem('kinsake-dark',String(dark));},[dark]);
+ useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),3500);return()=>clearTimeout(t);},[notice]);
+ useEffect(()=>{localStorage.setItem('kinsake-dark',String(dark));},[dark]);
  const photos=entries.filter(e=>e.kind==='photo'),milestones=entries.filter(e=>e.kind==='milestone'),voices=entries.filter(e=>e.kind==='voice');
  const filtered=useMemo(()=>entries.filter(e=>(e.title+' '+(e.note||'')).toLowerCase().includes(q.toLowerCase())),[entries,q]);
  const visiblePhotos=filtered.filter(e=>e.kind==='photo'),visibleMilestones=filtered.filter(e=>e.kind==='milestone'),visibleVoices=filtered.filter(e=>e.kind==='voice');
