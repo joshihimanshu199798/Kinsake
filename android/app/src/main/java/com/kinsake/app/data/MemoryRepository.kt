@@ -2,6 +2,7 @@ package com.kinsake.app.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -19,7 +20,8 @@ class MemoryRepository(context: Context) {
         app.contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(destination).use { output -> input.copyTo(output) }
         } ?: error("Could not read selected photo")
-        dao.insert(Memory(kind = "photo", title = destination.nameWithoutExtension, filePath = destination.absolutePath))
+        val capturedAt = runCatching { ExifInterface(destination.absolutePath).dateTimeOriginal }.getOrNull()?.takeIf { it > 0L } ?: System.currentTimeMillis()
+        dao.insert(Memory(kind = "photo", title = destination.nameWithoutExtension, dateMillis = capturedAt, filePath = destination.absolutePath))
     }
 
     suspend fun addMilestone(title: String, note: String) = withContext(Dispatchers.IO) {
