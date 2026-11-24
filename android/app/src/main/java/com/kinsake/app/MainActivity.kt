@@ -82,7 +82,7 @@ private fun KinsakeApp() {
     val repository = remember { MemoryRepository(context) }
     val scope = rememberCoroutineScope()
     var profiles by remember { mutableStateOf(loadChildProfiles(context)) }
-    var activeProfileId by remember { mutableStateOf(context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("activeChildId", "default-child") ?: "default-child") }
+    var activeProfileId by remember { mutableStateOf((context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("activeChildId", "default-child") ?: "default-child").takeIf { id -> profiles.any { it.id == id } } ?: profiles.first().id) }
     var childName by remember { mutableStateOf(profiles.firstOrNull { it.id == activeProfileId }?.name ?: "") }
     var newChildName by remember { mutableStateOf("") }
     var newChildBirth by remember { mutableStateOf("") }
