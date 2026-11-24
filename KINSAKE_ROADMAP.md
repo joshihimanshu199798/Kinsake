@@ -24,7 +24,8 @@ This roadmap is the implementation contract for the full Kinsake feature list. W
 - Recycle Bin with a 30-day recovery window.
 - Batch metadata/EXIF editing and junk-drawer classification.
 - Versioned full archive export/restore, including media and growth records.
-- Android backup/restore before private media can be considered safe from uninstall/data-clear loss.
+- [x] Android ZIP backup/restore: exports photos, voice recordings, milestones and child birth date to a user-selected document; restore validates the archive, stages media, and merges records without clearing existing data.
+- [ ] Add archive encryption/password protection and automated round-trip tests before treating the archive as secure long-term storage.
 
 ### Phase 3 — Parenting and family journal
 - Multiple child profiles and per-child age labels.
