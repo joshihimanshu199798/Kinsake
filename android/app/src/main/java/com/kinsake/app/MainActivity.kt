@@ -3,6 +3,7 @@ package com.kinsake.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,6 +66,7 @@ private fun KinsakeApp() {
     var recording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { uris ->
@@ -128,7 +131,7 @@ private fun KinsakeApp() {
                 "Photos" -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("Family photos", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Button(onClick = { photoPicker.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) }) { Text("Add") }
+                        Button(onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Add") }
                     }
                     MemoryGrid(memories.filter { it.kind == "photo" }, onOpen = { selected = it }, onDelete = { scope.launch { repository.delete(it) } })
                 }
@@ -148,16 +151,55 @@ private fun KinsakeApp() {
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = {
                         if (recording) {
-                            runCatching { recorder?.stop(); recorder?.release(); recordingFile?.let { scope.launch { repository.addVoice(it, "Voice memory · ${dateText(System.currentTimeMillis())}") } } }
-                                .onFailure { message = "Recording could not be saved" }
-                            recorder = null; recording = false; message = "Voice memory saved on this phone"
-                        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            val activeRecorder = recorder
+                            val file = recordingFile
+                            recorder = null
+                            recording = false
+                            try {
+                                activeRecorder?.stop()
+                                activeRecorder?.release()
+                                if (file == null || !file.exists() || file.length() == 0L) {
+                                    file?.delete()
+                                    message = "No audio was captured. Please try recording again."
+                                } else {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.addVoice(file, "Voice memory · ${dateText(System.currentTimeMillis())}")
+                                        }.onSuccess {
+                                            message = "Voice memory saved on this phone"
+                                        }.onFailure {
+                                            file.delete()
+                                            message = "Recording could not be saved"
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) {
+                                runCatching { activeRecorder?.release() }
+                                file?.delete()
+                                message = "Recording was too short or could not be saved"
+                            }
+                        } else {
                             audioPermission.launch(Manifest.permission.RECORD_AUDIO)
-                        } else audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
                     }) { Text(if (recording) "Stop and save" else "Start recording") }
                     memories.filter { it.kind == "voice" }.forEach { item ->
                         Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Text(item.title, Modifier.weight(1f)); TextButton(onClick = { item.filePath?.let { path -> runCatching { android.media.MediaPlayer().apply { setDataSource(path); prepare(); start() } } } }) { Text("Play") } }
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Text(item.title, Modifier.weight(1f)); TextButton(onClick = {
+                                item.filePath?.let { path ->
+                                    runCatching {
+                                        player?.release()
+                                        player = MediaPlayer().apply {
+                                            setDataSource(path)
+                                            setOnCompletionListener { finished ->
+                                                finished.release()
+                                                if (player === finished) player = null
+                                            }
+                                            prepare()
+                                            start()
+                                        }
+                                    }.onFailure { message = "Could not play this voice memory" }
+                                }
+                            }) { Text("Play") } }
                         }
                     }
                 }
@@ -200,6 +242,12 @@ private fun KinsakeApp() {
         AlertDialog(onDismissRequest = { selected = null }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
             title = { Text(item.title) },
             text = { if (item.filePath != null) AsyncImage(model = File(item.filePath), contentDescription = item.title, modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit) else Text(item.note) })
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { player?.release() }
+            runCatching { recorder?.release() }
+        }
     }
     message?.let { msg -> LaunchedEffect(msg) { kotlinx.coroutines.delay(2500); message = null } }
 }
