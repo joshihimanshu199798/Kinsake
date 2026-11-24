@@ -86,7 +86,8 @@ private fun KinsakeApp() {
     var childName by remember { mutableStateOf(profiles.firstOrNull { it.id == activeProfileId }?.name ?: "") }
     var newChildName by remember { mutableStateOf("") }
     var newChildBirth by remember { mutableStateOf("") }
-    val memories by repository.observeMemories(activeProfileId).collectAsState(initial = emptyList())
+    val memoriesFlow = remember(activeProfileId) { repository.observeMemories(activeProfileId) }
+    val memories by memoriesFlow.collectAsState(initial = emptyList())
     var tab by remember { mutableStateOf("Home") }
     var selected by remember { mutableStateOf<Memory?>(null) }
     var showAddMilestone by remember { mutableStateOf(false) }
