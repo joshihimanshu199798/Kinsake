@@ -2,7 +2,7 @@ name: Web checks
 on:
   pull_request:
   push:
-    branches: [main, feature/kinsake-complete-suite-phase-1]
+    branches: [main, feature/kinsake-complete-suite-phase-1, fix/exif-sub-ifd-date-fallback]
   workflow_dispatch:
 permissions:
   contents: read
