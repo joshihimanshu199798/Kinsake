@@ -20,9 +20,9 @@ import java.util.zip.ZipOutputStream
 class MemoryRepository(context: Context) {
     private val app = context.applicationContext
     private val dao = KinsakeDatabase.get(app).memoryDao()
-    val memories: Flow<List<Memory>> = dao.observeAll()
+    fun observeMemories(childId: String): Flow<List<Memory>> = dao.observeChild(childId)
 
-    suspend fun importPhoto(uri: Uri) = withContext(Dispatchers.IO) {
+    suspend fun importPhoto(uri: Uri, childId: String) = withContext(Dispatchers.IO) {
         val directory = File(app.filesDir, "memories/photos").apply { mkdirs() }
         val destination = File(directory, "photo_${System.currentTimeMillis()}_${(0..9999).random()}.jpg")
         try {
@@ -30,19 +30,19 @@ class MemoryRepository(context: Context) {
                 FileOutputStream(destination).use { output -> input.copyTo(output) }
             } ?: error("Could not read selected photo")
             val capturedAt = runCatching { ExifInterface(destination.absolutePath).dateTimeOriginal }.getOrNull()?.takeIf { it > 0L } ?: System.currentTimeMillis()
-            dao.insert(Memory(kind = "photo", title = destination.nameWithoutExtension, dateMillis = capturedAt, filePath = destination.absolutePath))
+            dao.insert(Memory(kind = "photo", title = destination.nameWithoutExtension, dateMillis = capturedAt, filePath = destination.absolutePath, childId = childId))
         } catch (error: Throwable) {
             destination.delete()
             throw error
         }
     }
 
-    suspend fun addMilestone(title: String, note: String) = withContext(Dispatchers.IO) {
-        dao.insert(Memory(kind = "milestone", title = title.trim(), note = note.trim()))
+    suspend fun addMilestone(title: String, note: String, childId: String) = withContext(Dispatchers.IO) {
+        dao.insert(Memory(kind = "milestone", title = title.trim(), note = note.trim(), childId = childId))
     }
 
-    suspend fun addVoice(file: File, title: String) = withContext(Dispatchers.IO) {
-        dao.insert(Memory(kind = "voice", title = title, filePath = file.absolutePath))
+    suspend fun addVoice(file: File, title: String, childId: String) = withContext(Dispatchers.IO) {
+        dao.insert(Memory(kind = "voice", title = title, filePath = file.absolutePath, childId = childId))
     }
 
     suspend fun delete(memory: Memory) = withContext(Dispatchers.IO) {
@@ -51,7 +51,7 @@ class MemoryRepository(context: Context) {
     }
 
     /** Writes a portable ZIP archive containing all memory metadata, private media and the child birth date. */
-    suspend fun exportBackup(output: OutputStream, birthDate: String) = withContext(Dispatchers.IO) {
+    suspend fun exportBackup(output: OutputStream, profiles: JSONArray) = withContext(Dispatchers.IO) {
         val records = dao.getAll()
         ZipOutputStream(output.buffered()).use { zip ->
             val mediaEntries = JSONArray()
@@ -59,13 +59,14 @@ class MemoryRepository(context: Context) {
                 .put("format", "kinsake-android-backup")
                 .put("version", 1)
                 .put("createdAt", System.currentTimeMillis())
-                .put("profile", JSONObject().put("birthDate", birthDate))
+                .put("profiles", profiles)
             records.forEachIndexed { index, memory ->
                 val item = JSONObject()
                     .put("kind", memory.kind)
                     .put("title", memory.title)
                     .put("note", memory.note)
                     .put("dateMillis", memory.dateMillis)
+                    .put("childId", memory.childId)
                 val source = memory.filePath?.let(::File)
                 if (source != null && source.isFile) {
                     val ext = source.extension.lowercase().takeIf { it.matches(Regex("[a-z0-9]{1,8}")) } ?: "bin"
@@ -89,7 +90,7 @@ class MemoryRepository(context: Context) {
      * Validates the complete archive before changing the database. Restore merges memories;
      * it never clears existing records. Extracted files are staged outside the live media folder.
      */
-    suspend fun restoreBackup(input: InputStream): String? = withContext(Dispatchers.IO) {
+    suspend fun restoreBackup(input: InputStream): JSONArray? = withContext(Dispatchers.IO) {
         val staging = File(app.cacheDir, "kinsake-restore-${UUID.randomUUID()}").apply { mkdirs() }
         val installedFiles = mutableListOf<File>()
         try {
@@ -157,10 +158,11 @@ class MemoryRepository(context: Context) {
                     installedFiles += destination
                     restoredPath = destination.absolutePath
                 }
-                restored += Memory(kind = kind, title = title, note = note, dateMillis = dateMillis, filePath = restoredPath)
+                val childId = item.optString("childId", "default-child").takeIf { it.isNotBlank() } ?: "default-child"
+                restored += Memory(kind = kind, title = title, note = note, dateMillis = dateMillis, filePath = restoredPath, childId = childId)
             }
             dao.insertAll(restored)
-            manifest.optJSONObject("profile")?.optString("birthDate")?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+            (manifest.optJSONArray("profiles") ?: JSONArray().put(JSONObject().put("id", "default-child").put("name", "").put("birthDate", manifest.optJSONObject("profile")?.optString("birthDate", "") ?: "")))
         } catch (error: Throwable) {
             installedFiles.forEach { it.delete() }
             throw error
