@@ -10,5 +10,6 @@ data class Memory(
     val title: String,
     val note: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
-    val filePath: String? = null
+    val filePath: String? = null,
+    val childId: String = "default-child"
 )
