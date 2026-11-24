@@ -35,6 +35,8 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.kinsake.app.data.Memory
 import com.kinsake.app.data.MemoryRepository
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -44,6 +46,24 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
+
+
+private data class ChildProfile(val id: String, val name: String, val birthDate: String)
+
+private fun loadChildProfiles(context: Context): List<ChildProfile> {
+    val prefs = context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE)
+    val saved = prefs.getString("profiles", null)
+    if (!saved.isNullOrBlank()) runCatching { profilesFromJson(JSONArray(saved)) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+    return listOf(ChildProfile("default-child", "", prefs.getString("birthDate", "") ?: ""))
+}
+
+private fun profilesFromJson(array: JSONArray): List<ChildProfile> = (0 until array.length()).mapNotNull { index ->
+    runCatching { val item = array.getJSONObject(index); ChildProfile(item.optString("id").ifBlank { "default-child" }, item.optString("name"), item.optString("birthDate")) }.getOrNull()
+}.distinctBy { it.id }
+
+private fun profilesToJson(profiles: List<ChildProfile>) = JSONArray().apply {
+    profiles.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("birthDate", it.birthDate)) }
+}
 
 private val Rose = Color(0xFFC77F76)
 private val Ink = Color(0xFF303630)
@@ -61,7 +81,12 @@ private fun KinsakeApp() {
     val context = LocalContext.current
     val repository = remember { MemoryRepository(context) }
     val scope = rememberCoroutineScope()
-    val memories by repository.memories.collectAsState(initial = emptyList())
+    var profiles by remember { mutableStateOf(loadChildProfiles(context)) }
+    var activeProfileId by remember { mutableStateOf(context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("activeChildId", "default-child") ?: "default-child") }
+    var childName by remember { mutableStateOf(profiles.firstOrNull { it.id == activeProfileId }?.name ?: "") }
+    var newChildName by remember { mutableStateOf("") }
+    var newChildBirth by remember { mutableStateOf("") }
+    val memories by repository.observeMemories(activeProfileId).collectAsState(initial = emptyList())
     var tab by remember { mutableStateOf("Home") }
     var selected by remember { mutableStateOf<Memory?>(null) }
     var showAddMilestone by remember { mutableStateOf(false) }
@@ -73,13 +98,13 @@ private fun KinsakeApp() {
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var birthDate by remember { mutableStateOf(context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("birthDate", "") ?: "") }
+    var birthDate by remember { mutableStateOf(profiles.firstOrNull { it.id == activeProfileId }?.birthDate ?: (context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).getString("birthDate", "") ?: "")) }
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) scope.launch {
             runCatching {
                 val output = context.contentResolver.openOutputStream(uri) ?: error("Could not create backup file")
-                output.use { repository.exportBackup(it, birthDate) }
+                output.use { repository.exportBackup(it, profilesToJson(profiles)) }
             }.onSuccess {
                 message = "Kinsake backup exported. Keep the ZIP file somewhere safe."
             }.onFailure {
@@ -92,10 +117,12 @@ private fun KinsakeApp() {
             runCatching {
                 val input = context.contentResolver.openInputStream(uri) ?: error("Could not open selected backup")
                 input.use { repository.restoreBackup(it) }
-            }.onSuccess { restoredBirthDate ->
-                if (!restoredBirthDate.isNullOrBlank()) {
-                    birthDate = restoredBirthDate
-                    context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("birthDate", restoredBirthDate).apply()
+            }.onSuccess { restoredProfileJson ->
+                if (restoredProfileJson != null) {
+                    profiles = profilesFromJson(restoredProfileJson)
+                    if (profiles.isEmpty()) profiles = listOf(ChildProfile("default-child", "", ""))
+                    activeProfileId = profiles.first().id; childName = profiles.first().name; birthDate = profiles.first().birthDate
+                    context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("profiles", profilesToJson(profiles).toString()).putString("activeChildId", activeProfileId).putString("birthDate", birthDate).apply()
                 }
                 storageUsed = repository.storageUsedBytes()
                 message = "Backup restored. Existing memories were kept; backup memories were added."
@@ -108,7 +135,7 @@ private fun KinsakeApp() {
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { uris ->
         if (uris.isNotEmpty()) scope.launch {
             var imported = 0
-            uris.forEach { uri -> runCatching { repository.importPhoto(uri); imported++ } }
+            uris.forEach { uri -> runCatching { repository.importPhoto(uri, activeProfileId); imported++ } }
             storageUsed = repository.storageUsedBytes()
             message = "Imported $imported of ${uris.size} photos"
         }
@@ -145,6 +172,7 @@ private fun KinsakeApp() {
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
             Spacer(Modifier.height(18.dp))
             Text("kinsake", style = MaterialTheme.typography.titleLarge, color = Rose, fontWeight = FontWeight.Bold)
+            Text(childName.ifBlank { "Your family's little universe" }, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Text("Your family's little universe", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Spacer(Modifier.height(18.dp))
             when (tab) {
@@ -200,7 +228,7 @@ private fun KinsakeApp() {
                                 } else {
                                     scope.launch {
                                         runCatching {
-                                            repository.addVoice(file, "Voice memory · ${dateText(System.currentTimeMillis())}")
+                                            repository.addVoice(file, "Voice memory · ${dateText(System.currentTimeMillis())}", activeProfileId)
                                         }.onSuccess {
                                             message = "Voice memory saved on this phone"
                                         }.onFailure {
@@ -240,9 +268,24 @@ private fun KinsakeApp() {
                     }
                 }
                 else -> {
-                    Text("Family profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(value = birthDate, onValueChange = { birthDate = it }, label = { Text("Child date of birth (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Button(onClick = { context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("birthDate", birthDate.trim()).apply(); message = "Child profile saved on this phone" }) { Text("Save child profile") }
+                    Text("Child profiles", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Memories are separated by child and remain on this phone.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    profiles.forEach { profile ->
+                        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = if (profile.id == activeProfileId) Color(0xFFF8EEEB) else Color.White)) {
+                            Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { Text(profile.name.ifBlank { "Child profile" }, fontWeight = FontWeight.Bold); Text(profile.birthDate, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
+                                if (profile.id == activeProfileId) Text("Active", color = Rose) else TextButton(onClick = { activeProfileId = profile.id; childName = profile.name; birthDate = profile.birthDate; context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("activeChildId", profile.id).putString("birthDate", profile.birthDate).apply(); message = "Switched child profile" }) { Text("Switch") }
+                            }
+                        }
+                    }
+                    OutlinedTextField(value = childName, onValueChange = { childName = it }, label = { Text("Child's name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = birthDate, onValueChange = { birthDate = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Button(onClick = { profiles = profiles.map { if (it.id == activeProfileId) it.copy(name = childName.trim(), birthDate = birthDate.trim()) else it }; context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("profiles", profilesToJson(profiles).toString()).putString("activeChildId", activeProfileId).putString("birthDate", birthDate.trim()).apply(); message = "Child profile saved on this phone" }) { Text("Save current profile") }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Add another child", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(value = newChildName, onValueChange = { newChildName = it }, label = { Text("New child's name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = newChildBirth, onValueChange = { newChildBirth = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Button(onClick = { if (newChildName.isBlank() || runCatching { LocalDate.parse(newChildBirth) }.isFailure) message = "Enter a name and valid date in YYYY-MM-DD format" else { val created = ChildProfile(java.util.UUID.randomUUID().toString(), newChildName.trim(), newChildBirth); profiles = profiles + created; activeProfileId = created.id; childName = created.name; birthDate = created.birthDate; context.getSharedPreferences("kinsake-profile", Context.MODE_PRIVATE).edit().putString("profiles", profilesToJson(profiles).toString()).putString("activeChildId", created.id).putString("birthDate", created.birthDate).apply(); newChildName = ""; newChildBirth = ""; message = "New child profile created" } }) { Text("Create child profile") }
                     Spacer(Modifier.height(12.dp))
                     Text("Backup & restore", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("Export includes your photos, voice recordings, milestones and child birth date. Restore adds memories without deleting what is already on this phone.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -281,7 +324,7 @@ private fun KinsakeApp() {
             }
         },
         confirmButton = { TextButton(onClick = {
-            if (title.isNotBlank()) scope.launch { repository.addMilestone(title, note); title = ""; note = ""; showAddMilestone = false }
+            if (title.isNotBlank()) scope.launch { repository.addMilestone(title, note, activeProfileId); title = ""; note = ""; showAddMilestone = false }
         }) { Text("Save") } },
         dismissButton = { TextButton(onClick = { showAddMilestone = false }) { Text("Cancel") } }
     )
