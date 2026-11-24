@@ -1,5 +1,6 @@
 package com.kinsake.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -11,5 +12,5 @@ data class Memory(
     val note: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
     val filePath: String? = null,
-    val childId: String = "default-child"
+    @ColumnInfo(defaultValue = "'default-child'") val childId: String = "default-child"
 )
