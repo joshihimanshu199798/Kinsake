@@ -22,8 +22,7 @@ abstract class KinsakeDatabase : RoomDatabase() {
                     context.applicationContext,
                     KinsakeDatabase::class.java,
                     "kinsake-local.db"
-                    .addMigrations(MIGRATION_1_2)
-                ).build().also { INSTANCE = it }
+                ).addMigrations(MIGRATION_1_2).build().also { INSTANCE = it }
             }
     }
 }
