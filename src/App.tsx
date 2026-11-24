@@ -39,6 +39,6 @@ export default function App(){
  </div>;
 }
 function Stat({icon,n,label}:{icon:ReactNode;n:string|number;label:string}){return <div className="stat"><span>{icon}</span><b>{n}</b><small>{label}</small></div>}
-function PageTitle({title,subtitle,action}:{title:string;subtitle:string;action?:React.ReactNode}){return <div className="pagetitle"><div><h1>{title}</h1><p>{subtitle}</p></div>{action}</div>}
+function PageTitle({title,subtitle,action}:{title:string;subtitle:string;action?:ReactNode}){return <div className="pagetitle"><div><h1>{title}</h1><p>{subtitle}</p></div>{action}</div>}
 function Empty({title,text,onClick}:{title:string;text:string;onClick:()=>void}){return <div className="empty"><div>♡</div><h3>{title}</h3><p>{text}</p><button className="primary" onClick={onClick}><Plus/> Get started</button></div>}
 function Photo({e,onDelete}:{e:Entry;onDelete:(e:Entry)=>void}){return <div className="photo"><img src={e.data} alt={e.title}/><div><b>{e.title}</b><small>{dateLabel(e.date)}</small><button className="delete" onClick={()=>onDelete(e)}><Trash2/></button></div></div>}
