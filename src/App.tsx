@@ -3,7 +3,7 @@ import {Heart,Camera,Star,Mic,FolderHeart,Users,Plus,Search,Download,Upload,Tras
 import {all,put,del,type Entry} from './db';
 type Tab='Home'|'Memories'|'Milestones'|'Voice notes'|'Family vault'|'Profile';
 const tabs:Tab[]=['Home','Memories','Milestones','Voice notes','Family vault','Profile'];
-const today=()=>new Date().toISOString().slice(0,10), id=()=>crypto.randomUUID();
+const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}, id=()=>crypto.randomUUID();
 const dateLabel=(s:string)=>new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 const read=(f:Blob)=>new Promise<string>((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result));r.onerror=()=>no(r.error);r.readAsDataURL(f);});
 export default function App(){
@@ -35,7 +35,7 @@ export default function App(){
  {tab==='Profile'&&<><PageTitle title="Family profile" subtitle="A few details help Kinsake organise your family's story."/><form className="profile" onSubmit={saveProfile}><div className="bigavatar">{name?name[0].toUpperCase():<Users/>}</div><label>Child's name<input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Aarav"/></label><label>Date of birth<input type="date" value={birth} onChange={e=>setBirth(e.target.value)}/></label><label>Family name<input value={family} onChange={e=>setFamily(e.target.value)} placeholder="e.g. The Sharma Family"/></label><div className="age"><CalendarDays/><span><b>Growing up so fast</b><small>{age()}</small></span></div><button className="primary"><Check/> Save profile</button></form></>}
  </section></main>
  <input ref={photoRef} hidden type="file" accept="image/*" multiple onChange={e=>addPhotos(e.target.files)}/><input ref={restoreRef} hidden type="file" accept=".json,application/json" onChange={e=>restore(e.target.files?.[0]||null)}/>
- <nav className="mobileNav">{tabs.slice(0,5).map(t=>{const I=iconFor(t);return <button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}><I/><small>{t==='Memories'?'Album':t==='Milestones'?'Firsts':t==='Voice notes'?'Voice':t==='Family vault'?'Vault':'Home'}</small></button>})}</nav>
+ <nav className="mobileNav">{tabs.map(t=>{const I=iconFor(t);return <button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}><I/><small>{t==='Memories'?'Album':t==='Milestones'?'Firsts':t==='Voice notes'?'Voice':t==='Family vault'?'Vault':'Home'}</small></button>})}</nav>
  {showMilestone&&<div className="backdrop" onClick={()=>setShowMilestone(false)}><form className="modal" onSubmit={addMilestone} onClick={e=>e.stopPropagation()}><div className="modalhead"><div><small>A MOMENT TO KEEP</small><h2>New milestone</h2></div><button type="button" className="outline" onClick={()=>setShowMilestone(false)}><X/></button></div><label>What happened?<input name="title" required placeholder="e.g. First steps!"/></label><label>When?<input name="date" type="date" defaultValue={today()} required/></label><label>Add a little note<textarea name="note" rows={3} placeholder="What made this moment special?"/></label><button className="primary"><Check/> Save milestone</button></form></div>}
  {notice&&<div className="toast"><Check/>{notice}</div>}
  </div>;
